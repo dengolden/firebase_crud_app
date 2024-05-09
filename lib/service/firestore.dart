@@ -21,6 +21,19 @@ class FirestoreService {
   }
 
   // UPDATE
+  Future<void> updateTask(String docID, String newTask) {
+    return tasks.doc(docID).update({
+      'task': newTask,
+      'timestamp': Timestamp.now(),
+    });
+  }
+
+  Future<DocumentSnapshot> getTaskById(String docID) {
+    return tasks.doc(docID).get();
+  }
 
   // DELETE
+  Future<void> deleteTask(String docID) {
+    return tasks.doc(docID).delete();
+  }
 }
