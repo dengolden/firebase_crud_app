@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crud_app/common/theme.dart';
 import 'package:firebase_crud_app/service/firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path/path.dart' as Path;
 
 class EditTaskPage extends StatefulWidget {
   final String docID;
@@ -16,8 +20,13 @@ class EditTaskPage extends StatefulWidget {
 
 class _EditTaskPageState extends State<EditTaskPage> {
   final FirestoreService firestoreService = FirestoreService();
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   TextEditingController _taskController = TextEditingController();
+  File? _image;
+  String? _imageUrl;
+  final picker = ImagePicker();
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -29,12 +38,52 @@ class _EditTaskPageState extends State<EditTaskPage> {
     DocumentSnapshot document =
         await firestoreService.getTaskById(widget.docID);
     Map<String, dynamic> data = document.data() as Map<String, dynamic>;
-    _taskController.text = data['task'] ?? '';
+    setState(() {
+      _taskController.text = data['task'] ?? '';
+      _imageUrl = data['imageUrl'];
+    });
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    setState(() {
+      if (pickedFile != null) {
+        _image = File(pickedFile.path);
+      } else {
+        print('No image selected.');
+      }
+    });
+  }
+
+  Future<String?> _uploadImage(File image) async {
+    try {
+      String fileName = Path.basename(image.path);
+      TaskSnapshot snapshot =
+          await _storage.ref().child('images/$fileName').putFile(image);
+      String downloadURL = await snapshot.ref.getDownloadURL();
+      return downloadURL;
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
   }
 
   Future<void> _saveChanges() async {
     String newTask = _taskController.text;
-    await firestoreService.updateTask(widget.docID, newTask);
+
+    setState(() {
+      _isUploading = true;
+    });
+    String? newImageUrl;
+    if (_image != null) {
+      newImageUrl = await _uploadImage(_image!);
+    }
+    await firestoreService.updateTask(
+        widget.docID, newTask, newImageUrl ?? _imageUrl ?? '');
+    setState(() {
+      _isUploading = false;
+    });
     Navigator.of(context).pop();
   }
 
@@ -67,7 +116,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
             icon: Icon(
               Icons.delete,
               size: 30,
-              color: blackColor,
+              color: Colors.red,
             ),
           ),
         ],
@@ -125,31 +174,52 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ],
             ),
           ),
+          SizedBox(height: 20),
+          _image == null
+              ? _imageUrl == null
+                  ? Text('No image selected.')
+                  : Image.network(_imageUrl!, height: 150)
+              : Image.file(_image!, height: 150),
+          SizedBox(height: 20),
           Container(
-            margin: EdgeInsets.only(
-              top: 50,
-              left: 20,
-              right: 20,
-            ),
-            width: double.infinity,
-            height: 50,
+            margin: EdgeInsets.symmetric(horizontal: 20),
+            height: 40,
             decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
               color: blueColor,
-              borderRadius: BorderRadius.circular(10),
             ),
             child: TextButton(
-              onPressed: () {
-                _saveChanges();
-              },
+              onPressed: _pickImage,
               child: Text(
-                'Save your Changes',
+                'Edit Image',
                 style: regularTextStyle.copyWith(
                   color: whiteColor,
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
             ),
           ),
+          SizedBox(height: 20),
+          _isUploading
+              ? CircularProgressIndicator()
+              : Container(
+                  margin: EdgeInsets.symmetric(
+                    horizontal: 20,
+                  ),
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: blueColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: TextButton(
+                    onPressed: _saveChanges,
+                    child: Text(
+                      'Save your Changes',
+                      style: regularTextStyle.copyWith(
+                          color: whiteColor, fontSize: 16),
+                    ),
+                  ),
+                ),
         ],
       ),
     );

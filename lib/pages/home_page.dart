@@ -225,11 +225,10 @@ class HomePage extends StatelessWidget {
               itemBuilder: (context, index) {
                 DocumentSnapshot document = tasksList[index];
                 String docID = document.id;
-
                 Map<String, dynamic> data =
                     document.data() as Map<String, dynamic>;
                 String taskTitle = data['task'];
-
+                String taskImage = data['imageUrl'];
                 return GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -267,20 +266,22 @@ class HomePage extends StatelessWidget {
                     child: Row(
                       children: [
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Container(
-                              width: 25,
-                              height: 25,
+                              width: 50,
+                              height: 50,
                               decoration: BoxDecoration(
+                                shape: BoxShape.circle,
                                 image: DecorationImage(
-                                  image: AssetImage(
-                                    'assets/emote.png',
+                                  fit: BoxFit.cover,
+                                  image: NetworkImage(
+                                    taskImage,
                                   ),
                                 ),
                               ),
                             ),
-                            SizedBox(width: 5),
+                            SizedBox(width: 10),
                             Text(
                               taskTitle,
                               style: regularTextStyle.copyWith(
@@ -300,7 +301,7 @@ class HomePage extends StatelessWidget {
             return Text('Error: ${snapshot.error}');
           } else {
             return Text(
-              'Bikin dulu Textnya :(',
+              'Bikin dulu Tugasnya :(',
               style: regularTextStyle.copyWith(
                 color: blackColor,
               ),

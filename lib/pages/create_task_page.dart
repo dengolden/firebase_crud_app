@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:firebase_crud_app/common/theme.dart';
 import 'package:firebase_crud_app/service/firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path/path.dart' as Path;
 
 class CreateTaskPage extends StatefulWidget {
   const CreateTaskPage({super.key});
@@ -11,17 +15,73 @@ class CreateTaskPage extends StatefulWidget {
 
 class _CreateTaskPageState extends State<CreateTaskPage> {
   final FirestoreService firestoreService = FirestoreService();
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   final TextEditingController _taskController = TextEditingController();
+  File? _image;
+  final picker = ImagePicker();
+  bool _isUploading = false;
+
+  Future<void> _pickImage() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    setState(() {
+      if (pickedFile != null) {
+        _image = File(pickedFile.path);
+      } else {
+        print('No image selected.');
+      }
+    });
+  }
+
+  Future<String?> _uploadImage(File image) async {
+    try {
+      String fileName = Path.basename(image.path);
+      TaskSnapshot snapshot =
+          await _storage.ref().child('images/$fileName').putFile(image);
+      String downloadURL = await snapshot.ref.getDownloadURL();
+      return downloadURL;
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
+  }
 
   void _addTask() async {
     String task = _taskController.text.trim();
+    if (task.isEmpty || _image == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter a task and select an image.')),
+      );
+      return;
+    }
 
-    await firestoreService.addTask(task);
+    setState(() {
+      _isUploading = true;
+    });
 
-    _taskController.clear();
+    // Upload Gambar dari Storage ke Firestore
+    String? imageUrl = await _uploadImage(_image!);
 
-    Navigator.pop(context);
+    if (imageUrl != null) {
+      await firestoreService.addTask(task, imageUrl);
+
+      _taskController.clear();
+      setState(() {
+        _image = null;
+        _isUploading = false;
+      });
+
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _isUploading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image. Please try again.')),
+      );
+    }
   }
 
   @override
@@ -98,31 +158,53 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
               ],
             ),
           ),
+          SizedBox(height: 20),
+          _image == null
+              ? Text('No image selected.')
+              : Image.file(_image!, height: 150),
+          SizedBox(height: 20),
           Container(
-            margin: EdgeInsets.only(
-              top: 50,
-              left: 20,
-              right: 20,
-            ),
-            width: double.infinity,
-            height: 50,
+            margin: EdgeInsets.symmetric(horizontal: 20),
+            width: 150,
+            height: 40,
             decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
               color: blueColor,
-              borderRadius: BorderRadius.circular(10),
             ),
             child: TextButton(
-              onPressed: () {
-                _addTask();
-              },
+              onPressed: _pickImage,
               child: Text(
-                'Create Your Task',
+                'Upload Image',
                 style: regularTextStyle.copyWith(
                   color: whiteColor,
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
             ),
           ),
+          SizedBox(height: 20),
+          _isUploading
+              ? CircularProgressIndicator()
+              : Container(
+                  margin: EdgeInsets.symmetric(
+                    horizontal: 20,
+                  ),
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: blueColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: TextButton(
+                    onPressed: _addTask,
+                    child: Text(
+                      'Create your Task',
+                      style: regularTextStyle.copyWith(
+                        color: whiteColor,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
         ],
       ),
     );
